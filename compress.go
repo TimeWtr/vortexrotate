@@ -16,6 +16,8 @@ package vortexrotate
 
 import (
 	"compress/gzip"
+	"fmt"
+	"github.com/golang/snappy"
 	"github.com/valyala/gozstd"
 	"io"
 	"os"
@@ -25,6 +27,10 @@ const (
 	CompressTypeUnknown = iota
 	CompressTypeGzip
 	CompressTypeZstd
+	CompressTypeSnappy
+
+	_minCompressType = CompressTypeGzip
+	_maxCompressType = CompressTypeSnappy
 )
 
 const bufferSize = 128 * 1024
@@ -37,9 +43,25 @@ const (
 	GzipHuffmanOnly        = gzip.HuffmanOnly
 )
 
+func CompressFn(fn string, tp int) string {
+	switch tp {
+	case CompressTypeGzip:
+		return fmt.Sprintf("%s.gz", fn)
+	case CompressTypeZstd:
+		return fmt.Sprintf("%s.zst", fn)
+	case CompressTypeSnappy:
+		return fmt.Sprintf("%s.snappy", fn)
+	default:
+		return ""
+	}
+}
+
 // CompressStrategy 压缩策略，对文件执行压缩操作
 type CompressStrategy interface {
+	// Compress 执行压缩逻辑
 	Compress() error
+	// Reset 重置压缩
+	Reset(w io.Writer, f *os.File)
 }
 
 type Gzip struct {
@@ -90,15 +112,22 @@ func (g *Gzip) Compress() error {
 	return g.w.Flush()
 }
 
+func (g *Gzip) Reset(w io.Writer, f *os.File) {
+	g.w.Reset(w)
+	g.f = f
+}
+
 type Zstd struct {
 	w *gozstd.Writer
 	f *os.File
+	l int
 }
 
 func NewZstd(outFile io.Writer, f *os.File, compressLevel int) CompressStrategy {
 	return &Zstd{
 		w: gozstd.NewWriterLevel(outFile, compressLevel),
 		f: f,
+		l: compressLevel,
 	}
 }
 
@@ -125,11 +154,63 @@ func (z *Zstd) Compress() error {
 			break
 		}
 
-		_, err = z.w.Write(bs[:n])
-		if err != nil {
+		if _, err = z.w.Write(bs[:n]); err != nil {
 			return err
 		}
 	}
 
 	return z.w.Flush()
+}
+
+func (z *Zstd) Reset(w io.Writer, f *os.File) {
+	z.w = gozstd.NewWriterLevel(w, z.l)
+	z.f = f
+}
+
+type Snappy struct {
+	w *snappy.Writer
+	f *os.File
+}
+
+func NewSnappy(outFile io.Writer, f *os.File) CompressStrategy {
+	return &Snappy{
+		w: snappy.NewWriter(outFile),
+		f: f,
+	}
+}
+
+func (s *Snappy) Compress() error {
+	defer func() {
+		_ = s.w.Close()
+	}()
+
+	if s.f == nil {
+		return os.ErrClosed
+	}
+	defer func() {
+		_ = s.f.Close()
+	}()
+
+	bs := make([]byte, bufferSize)
+	for {
+		n, err := s.f.Read(bs)
+		if err != nil && err != io.EOF {
+			return err
+		}
+
+		if err == io.EOF || n == 0 {
+			break
+		}
+
+		if _, err = s.w.Write(bs[:n]); err != nil {
+			return err
+		}
+	}
+
+	return s.w.Flush()
+}
+
+func (s *Snappy) Reset(w io.Writer, f *os.File) {
+	s.w.Reset(w)
+	s.f = f
 }

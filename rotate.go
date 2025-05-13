@@ -32,54 +32,65 @@ const (
 	DefaultMaxSize = 1024 * 1024 * 100
 )
 
-type Option func(*Rotator)
+type Option func(*Rotator) error
 
 // WithStrategy 设置轮转策略
 func WithStrategy(stg RotateStrategy) Option {
-	return func(r *Rotator) {
+	return func(r *Rotator) error {
 		r.stg = stg
+		return nil
 	}
 }
 
 // WithCompress 开启压缩
 func WithCompress() Option {
-	return func(r *Rotator) {
+	return func(r *Rotator) error {
 		r.compress = true
+		return nil
 	}
 }
 
 // WithCompressType 压缩的算法类型
 func WithCompressType(tp int) Option {
-	return func(r *Rotator) {
+	return func(r *Rotator) error {
+		if tp < _minCompressType || tp > _maxCompressType {
+			return ErrCompressType
+		}
+
 		r.compressType = tp
+		return nil
 	}
 }
 
 // WithCompressLevel 压缩的级别
 func WithCompressLevel(level int) Option {
-	return func(r *Rotator) {
+	return func(r *Rotator) error {
 		r.compressLevel = level
+		return nil
 	}
 }
 
 // WithPeriod 设置保存周期
 func WithPeriod(period uint16) Option {
-	return func(r *Rotator) {
+	return func(r *Rotator) error {
 		r.period = period
+		return nil
 	}
 }
 
 // WithMaxCount 设置保存的最大文件数量
 func WithMaxCount(count uint16) Option {
-	return func(r *Rotator) {
+	return func(r *Rotator) error {
 		r.maxCount = count
+		return nil
 	}
 }
 
 // WithMaxSize 设置单个文件写入的最大字节
 func WithMaxSize(maxSize uint64) Option {
-	return func(r *Rotator) {
+	return func(r *Rotator) error {
 		r.maxSize = maxSize
+		return nil
 	}
 }
 
@@ -110,6 +121,8 @@ type Rotator struct {
 	compressType int
 	// 压缩级别
 	compressLevel int
+	// 压缩的策略
+	cs CompressStrategy
 	// 单个文件最大的大小
 	maxSize uint64
 	// 当前文件写入的大小
@@ -139,13 +152,19 @@ func NewRotator(dir, filename string, opts ...Option) (*Rotator, error) {
 	r.sig.Store(0)
 
 	for _, opt := range opts {
-		opt(r)
+		if err = opt(r); err != nil {
+			return r, err
+		}
 	}
 
 	if r.compress {
 		// 如果没有设置压缩类型，默认使用Gzip压缩
 		if r.compressType == CompressTypeUnknown {
 			r.compressType = CompressTypeGzip
+			r.cs, err = NewGzip(nil, f, GzipBestSpeed)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		if r.compressLevel == 0 {
@@ -197,11 +216,8 @@ func (r *Rotator) rotate() error {
 			if err != nil {
 				return err
 			}
-			cs, err := NewGzip(w, r.f, r.compressLevel)
-			if err != nil {
-				return err
-			}
-			if err = cs.Compress(); err != nil {
+			r.cs.Reset(w, r.f)
+			if err = r.cs.Compress(); err != nil {
 				return err
 			}
 		case CompressTypeUnknown:
@@ -210,8 +226,8 @@ func (r *Rotator) rotate() error {
 			if err != nil {
 				return err
 			}
-			cs := NewZstd(w, r.f, r.compressLevel)
-			if err = cs.Compress(); err != nil {
+			r.cs.Reset(w, r.f)
+			if err = r.cs.Compress(); err != nil {
 				return err
 			}
 		default:
