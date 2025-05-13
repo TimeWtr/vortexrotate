@@ -6,12 +6,12 @@ tidy:
 ut:
 	@go test -race ./...
 
-.PHONY: cleanup
-cleanup:
-	@cd tests && rm test.l.gz && rm test.l.zst
+.PHONY: clean
+clean:
+	@cd tests && rm *.gz || true  && rm *.zst || true && rm *.snappy || true
 
 .PHONY: check
 check:
 	@$(MAKE) --no-print-directory tidy
 	@$(MAKE) --no-print-directory ut
-	@$(MAKE) --no-print-directory cleanup
+	@$(MAKE) --no-print-directory clean

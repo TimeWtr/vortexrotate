@@ -3,6 +3,7 @@ module github.com/TimeWtr/vortexrotate
 go 1.23.4
 
 require (
+	github.com/golang/snappy v1.0.0
 	github.com/stretchr/testify v1.10.0
 	github.com/valyala/gozstd v1.21.2
 )

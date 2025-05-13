@@ -22,8 +22,9 @@ import (
 	"testing"
 )
 
-func TestNewGzip(t *testing.T) {
-	w, err := os.OpenFile(filepath.Join("./tests", "test.l.gz"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+func TestNewGzip_Compress(t *testing.T) {
+	w, err := os.OpenFile(filepath.Join("./tests",
+		CompressFn("test.log", CompressTypeGzip)), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 	assert.NoError(t, err)
 	if err != nil {
 		return
@@ -42,8 +43,49 @@ func TestNewGzip(t *testing.T) {
 	t.Log("Gzip compress finished")
 }
 
-func TestNewZstd(t *testing.T) {
-	w, err := os.OpenFile(filepath.Join("./tests", "test.l.zst"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+func TestNewGzip_Reset(t *testing.T) {
+	w, err := os.OpenFile(filepath.Join("./tests",
+		CompressFn("test.log", CompressTypeGzip)), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+	assert.NoError(t, err)
+	if err != nil {
+		return
+	}
+
+	f, err := os.Open(filepath.Join("./tests", "test.log"))
+	assert.NoError(t, err)
+	if err != nil {
+		return
+	}
+
+	gs, err := NewGzip(w, f, GzipBestSpeed)
+	assert.NoError(t, err)
+	err = gs.Compress()
+	assert.NoError(t, err)
+
+	t.Log("Gzip compress finished")
+
+	w, err = os.OpenFile(filepath.Join("./tests",
+		CompressFn("test.reset", CompressTypeGzip)), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+	assert.NoError(t, err)
+	if err != nil {
+		return
+	}
+
+	f, err = os.Open(filepath.Join("./tests", "test.reset.log"))
+	assert.NoError(t, err)
+	if err != nil {
+		return
+	}
+
+	gs.Reset(w, f)
+	err = gs.Compress()
+	assert.NoError(t, err)
+	t.Log("Gzip reset compress finished")
+}
+
+func TestNewZstd_Compress(t *testing.T) {
+	w, err := os.OpenFile(filepath.Join("./tests",
+		CompressFn("test.log", CompressTypeZstd)), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 	assert.NoError(t, err)
 	if err != nil {
 		return
@@ -59,4 +101,100 @@ func TestNewZstd(t *testing.T) {
 	err = zstd.Compress()
 	assert.NoError(t, err)
 	t.Log("Zstd compress finished")
+}
+
+func TestNewZstd_Reset(t *testing.T) {
+	w, err := os.OpenFile(filepath.Join("./tests",
+		CompressFn("test.log", CompressTypeZstd)), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+	assert.NoError(t, err)
+	if err != nil {
+		return
+	}
+
+	f, err := os.Open(filepath.Join("./tests", "test.log"))
+	assert.NoError(t, err)
+	if err != nil {
+		return
+	}
+
+	zstd := NewZstd(w, f, gozstd.DefaultCompressionLevel)
+	err = zstd.Compress()
+	assert.NoError(t, err)
+	t.Log("Zstd compress finished")
+
+	w, err = os.OpenFile(filepath.Join("./tests",
+		CompressFn("test.reset", CompressTypeZstd)), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+	assert.NoError(t, err)
+	if err != nil {
+		return
+	}
+
+	f, err = os.Open(filepath.Join("./tests", "test.reset.log"))
+	assert.NoError(t, err)
+	if err != nil {
+		return
+	}
+
+	zstd.Reset(w, f)
+	err = zstd.Compress()
+	assert.NoError(t, err)
+	t.Log("Zstd reset compress finished")
+}
+
+func TestNewSnappy_Compress(t *testing.T) {
+	w, err := os.OpenFile(filepath.Join("./tests",
+		CompressFn("test.log", CompressTypeSnappy)), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+	assert.NoError(t, err)
+	if err != nil {
+		return
+	}
+
+	f, err := os.Open(filepath.Join("./tests", "test.log"))
+	assert.NoError(t, err)
+	if err != nil {
+		return
+	}
+
+	snappy := NewSnappy(w, f)
+	err = snappy.Compress()
+	assert.NoError(t, err)
+	t.Log("Snappy compress finished")
+}
+
+func TestNewSnappy_Reset(t *testing.T) {
+	w, err := os.OpenFile(filepath.Join("./tests",
+		CompressFn("test.log", CompressTypeSnappy)), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+	assert.NoError(t, err)
+	if err != nil {
+		return
+	}
+
+	f, err := os.Open(filepath.Join("./tests", "test.log"))
+	assert.NoError(t, err)
+	if err != nil {
+		return
+	}
+
+	s := NewSnappy(w, f)
+	err = s.Compress()
+	assert.NoError(t, err)
+	t.Log("Snappy compress finished")
+
+	w, err = os.OpenFile(filepath.Join("./tests",
+		CompressFn("test.reset", CompressTypeSnappy)), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+	assert.NoError(t, err)
+	if err != nil {
+		return
+	}
+
+	f, err = os.Open(filepath.Join("./tests", "test.reset.log"))
+	assert.NoError(t, err)
+	if err != nil {
+		return
+	}
+
+	s.Reset(w, f)
+	err = s.Compress()
+	assert.NoError(t, err)
+	t.Log("Snappy reset compress finished")
 }
