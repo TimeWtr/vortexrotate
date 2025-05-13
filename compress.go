@@ -43,7 +43,7 @@ const (
 	GzipHuffmanOnly        = gzip.HuffmanOnly
 )
 
-func CompressFn(fn string, tp int) string {
+func compressFn(fn string, tp int) string {
 	switch tp {
 	case CompressTypeGzip:
 		return fmt.Sprintf("%s.gz", fn)
