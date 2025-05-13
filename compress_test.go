@@ -24,7 +24,7 @@ import (
 
 func TestNewGzip_Compress(t *testing.T) {
 	w, err := os.OpenFile(filepath.Join("./tests",
-		CompressFn("test.log", CompressTypeGzip)), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+		compressFn("test.log", CompressTypeGzip)), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 	assert.NoError(t, err)
 	if err != nil {
 		return
@@ -45,7 +45,7 @@ func TestNewGzip_Compress(t *testing.T) {
 
 func TestNewGzip_Reset(t *testing.T) {
 	w, err := os.OpenFile(filepath.Join("./tests",
-		CompressFn("test.log", CompressTypeGzip)), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+		compressFn("test.log", CompressTypeGzip)), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 	assert.NoError(t, err)
 	if err != nil {
 		return
@@ -65,7 +65,7 @@ func TestNewGzip_Reset(t *testing.T) {
 	t.Log("Gzip compress finished")
 
 	w, err = os.OpenFile(filepath.Join("./tests",
-		CompressFn("test.reset", CompressTypeGzip)), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+		compressFn("test.reset", CompressTypeGzip)), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 	assert.NoError(t, err)
 	if err != nil {
 		return
@@ -85,7 +85,7 @@ func TestNewGzip_Reset(t *testing.T) {
 
 func TestNewZstd_Compress(t *testing.T) {
 	w, err := os.OpenFile(filepath.Join("./tests",
-		CompressFn("test.log", CompressTypeZstd)), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+		compressFn("test.log", CompressTypeZstd)), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 	assert.NoError(t, err)
 	if err != nil {
 		return
@@ -105,7 +105,7 @@ func TestNewZstd_Compress(t *testing.T) {
 
 func TestNewZstd_Reset(t *testing.T) {
 	w, err := os.OpenFile(filepath.Join("./tests",
-		CompressFn("test.log", CompressTypeZstd)), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+		compressFn("test.log", CompressTypeZstd)), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 	assert.NoError(t, err)
 	if err != nil {
 		return
@@ -123,7 +123,7 @@ func TestNewZstd_Reset(t *testing.T) {
 	t.Log("Zstd compress finished")
 
 	w, err = os.OpenFile(filepath.Join("./tests",
-		CompressFn("test.reset", CompressTypeZstd)), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+		compressFn("test.reset", CompressTypeZstd)), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 	assert.NoError(t, err)
 	if err != nil {
 		return
@@ -143,7 +143,7 @@ func TestNewZstd_Reset(t *testing.T) {
 
 func TestNewSnappy_Compress(t *testing.T) {
 	w, err := os.OpenFile(filepath.Join("./tests",
-		CompressFn("test.log", CompressTypeSnappy)), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+		compressFn("test.log", CompressTypeSnappy)), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 	assert.NoError(t, err)
 	if err != nil {
 		return
@@ -163,7 +163,7 @@ func TestNewSnappy_Compress(t *testing.T) {
 
 func TestNewSnappy_Reset(t *testing.T) {
 	w, err := os.OpenFile(filepath.Join("./tests",
-		CompressFn("test.log", CompressTypeSnappy)), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+		compressFn("test.log", CompressTypeSnappy)), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 	assert.NoError(t, err)
 	if err != nil {
 		return
@@ -181,7 +181,7 @@ func TestNewSnappy_Reset(t *testing.T) {
 	t.Log("Snappy compress finished")
 
 	w, err = os.OpenFile(filepath.Join("./tests",
-		CompressFn("test.reset", CompressTypeSnappy)), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+		compressFn("test.reset", CompressTypeSnappy)), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 	assert.NoError(t, err)
 	if err != nil {
 		return

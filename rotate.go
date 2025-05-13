@@ -16,7 +16,6 @@ package vortexrotate
 
 import (
 	"compress/gzip"
-	"fmt"
 	"github.com/valyala/gozstd"
 	"os"
 	"sync"
@@ -209,29 +208,8 @@ func (r *Rotator) Write(p []byte) (int, error) {
 
 func (r *Rotator) rotate() error {
 	if r.compress {
-		switch r.compressType {
-		case CompressTypeGzip:
-			// TODO 处理压缩文件的名称问题
-			w, err := os.OpenFile(r.filename, os.O_CREATE|os.O_APPEND|os.O_APPEND, 0666)
-			if err != nil {
-				return err
-			}
-			r.cs.Reset(w, r.f)
-			if err = r.cs.Compress(); err != nil {
-				return err
-			}
-		case CompressTypeUnknown:
-			// TODO 处理压缩文件的名称问题
-			w, err := os.OpenFile(r.filename, os.O_CREATE|os.O_APPEND|os.O_APPEND, 0666)
-			if err != nil {
-				return err
-			}
-			r.cs.Reset(w, r.f)
-			if err = r.cs.Compress(); err != nil {
-				return err
-			}
-		default:
-			return fmt.Errorf("unknown compress type: %v", r.compressType)
+		if err := r.cps(); err != nil {
+			return err
 		}
 	}
 
@@ -244,10 +222,27 @@ func (r *Rotator) rotate() error {
 	return nil
 }
 
+// cps 执行压缩操作
+func (r *Rotator) cps() error {
+	wf := compressFn(r.f.Name(), r.compressType)
+	w, err := os.OpenFile(wf, os.O_CREATE|os.O_APPEND|os.O_APPEND, 0666)
+	if err != nil {
+		return err
+	}
+
+	r.cs.Reset(w, r.f)
+	if err = r.cs.Compress(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (r *Rotator) Close() {
 	r.sig.Store(1)
 	if r.f == nil {
 		return
 	}
+
 	_ = r.f.Close()
 }
