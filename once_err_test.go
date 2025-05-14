@@ -16,12 +16,37 @@ package vortexrotate
 
 import (
 	"errors"
+	"github.com/stretchr/testify/assert"
+	"testing"
 )
 
-var (
-	ErrCompressType = errors.New("compress type not support")
-	ErrTimeType     = errors.New("rotate cron time type not support")
-	ErrRotateClosed = errors.New("rotate is closed")
-)
+func TestOnceWithError(t *testing.T) {
+	testCases := []struct {
+		name    string
+		fn      func() error
+		wantErr error
+	}{
+		{
+			name: "error",
+			fn: func() error {
+				return errors.New("test error")
+			},
+			wantErr: errors.New("test error"),
+		},
+		{
+			name: "nil",
+			fn: func() error {
+				return nil
+			},
+			wantErr: nil,
+		},
+	}
 
-var ErrFilename = errors.New("filename must contain exactly one '.' character")
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var onceErr OnceWithError
+			onceErr.Do(tc.fn)
+			assert.Equal(t, tc.wantErr, onceErr.Err())
+		})
+	}
+}

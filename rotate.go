@@ -25,24 +25,18 @@ import (
 	"time"
 )
 
+var (
+	r             *Rotator
+	onceWithError OnceWithError
+)
+
 const (
-	// DefaultPeriod 默认保存的天数，30天
-	DefaultPeriod = 30
-	// DefaultMaxCount 默认保存的最大文件数量，100个
-	DefaultMaxCount = 100
-	// DefaultMaxSize 默认单个日志文件保存的最大大小，100MB
-	DefaultMaxSize = 1024 * 1024 * 100
+	WritingStatus = iota
+	RotatingStatus
+	RejectStatus
 )
 
 type Option func(*Rotator) error
-
-// WithStrategy 设置轮转策略
-func WithStrategy(stg RotateStrategy) Option {
-	return func(r *Rotator) error {
-		r.stg = stg
-		return nil
-	}
-}
 
 // WithCompress 开启压缩
 func WithCompress() Option {
@@ -112,7 +106,9 @@ type Rotator struct {
 	// 执行轮转的策略
 	stg RotateStrategy
 	// 锁保护
-	lock sync.Mutex
+	lock sync.RWMutex
+	// 当前的状态：写入、拒绝写入、轮转中
+	status atomic.Uint32
 	// 最大保留周期，天数
 	period uint16
 	// 保留的最大文件数量
@@ -129,21 +125,35 @@ type Rotator struct {
 	cs CompressStrategy
 	// 单个文件最大的大小
 	maxSize uint64
-	// 当前文件写入的大小
-	size atomic.Uint64
 	// 关闭信号
 	sig atomic.Int32
 	// 轮转计数器
 	counter atomic.Uint32
 }
 
-func NewRotator(dir, filename string, opts ...Option) (*Rotator, error) {
+// NewRotator 生产环境单例模式
+func NewRotator(dir string, filename string, opts ...Option) (*Rotator, error) {
+	onceWithError.Do(func() error {
+		rotator, err := newRotator(dir, filename, opts...)
+		if err != nil {
+			return err
+		}
+
+		r = rotator
+		return nil
+	})
+
+	return r, onceWithError.err
+}
+
+func newRotator(dir, filename string, opts ...Option) (*Rotator, error) {
 	sli := strings.Split(filename, ".")
 	if len(sli) != 2 {
-		return nil, fmt.Errorf("filename must contain exactly one '.' character")
+		return nil, ErrFilename
 	}
 
-	r := &Rotator{
+	var rotator *Rotator
+	rotator = &Rotator{
 		dir:      dir,
 		filename: sli[0],
 		suffix:   sli[1],
@@ -151,61 +161,74 @@ func NewRotator(dir, filename string, opts ...Option) (*Rotator, error) {
 		maxCount: DefaultMaxCount,
 		maxSize:  DefaultMaxSize,
 		compress: false,
-		lock:     sync.Mutex{},
+		lock:     sync.RWMutex{},
 	}
-	r.size.Store(0)
-	r.sig.Store(0)
-	r.counter.Store(0)
 
-	if err := r.mkdirAll(); err != nil {
+	rotator.sig.Store(0)
+	rotator.counter.Store(1)
+
+	if err := rotator.mkdirAll(); err != nil {
 		return nil, err
 	}
 
-	f, err := os.OpenFile(r.newFile(), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	f, err := os.OpenFile(rotator.newFile(), os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
 	if err != nil {
 		return nil, err
 	}
+	rotator.f = f
+	rotator.status.Store(WritingStatus)
 
 	for _, opt := range opts {
-		if err = opt(r); err != nil {
-			return r, err
+		if err = opt(rotator); err != nil {
+			return nil, err
 		}
 	}
 
-	r.stg, err = NewMixStrategy(r.maxSize, Hour)
+	rotator.stg, err = NewMixStrategy(rotator.maxSize, Hour)
 	if err != nil {
 		return nil, err
 	}
 
-	if r.compress {
+	if rotator.compress {
 		// 如果没有设置压缩类型，默认使用Gzip压缩
-		if r.compressType == CompressTypeUnknown {
-			r.compressType = CompressTypeGzip
-			r.cs, err = NewGzip(nil, f, GzipBestSpeed)
+		if rotator.compressType == CompressTypeUnknown {
+			rotator.compressType = CompressTypeGzip
+			rotator.cs, err = NewGzip(nil, f, GzipBestSpeed)
 			if err != nil {
 				return nil, err
 			}
 		}
 
-		if r.compressLevel == 0 {
-			if r.compressType == CompressTypeGzip {
-				r.compressLevel = gzip.DefaultCompression
+		if rotator.compressLevel == 0 {
+			if rotator.compressType == CompressTypeGzip {
+				rotator.compressLevel = gzip.DefaultCompression
 			}
 
-			if r.compressType == CompressTypeZstd {
-				r.compressLevel = gozstd.DefaultCompressionLevel
+			if rotator.compressType == CompressTypeZstd {
+				rotator.compressLevel = gozstd.DefaultCompressionLevel
 			}
 		}
 	}
 
-	return r, nil
+	return rotator, nil
 }
 
 // Write 执行写入逻辑，判断大小是否已经达到最大大小，如果是则执行轮转逻辑
 // 轮转后根据压缩配置执行压缩逻辑
 func (r *Rotator) Write(p []byte) (int, error) {
+	if r.sig.Load() == 1 {
+		return 0, ErrRotateClosed
+	}
+
 	r.lock.Lock()
 	defer r.lock.Unlock()
+	for {
+		if r.status.Load() == WritingStatus {
+			break
+		}
+
+		time.Sleep(time.Millisecond)
+	}
 
 	if r.f == nil {
 		return 0, os.ErrClosed
@@ -213,9 +236,9 @@ func (r *Rotator) Write(p []byte) (int, error) {
 
 	if r.stg.ShouldRotate(uint64(len(p))) {
 		// 需要执行日志轮转
-		if err := r.rotate(); err != nil {
-			return 0, err
-		}
+		//if err := r.rotate(); err != nil {
+		//	return 0, err
+		//}
 	}
 
 	n, err := r.f.Write(p)
@@ -223,13 +246,15 @@ func (r *Rotator) Write(p []byte) (int, error) {
 		return n, err
 	}
 
-	r.size.Add(uint64(n))
 	return n, nil
 }
 
-func (r *Rotator) rotate() error {
+func (r *Rotator) rotate() (err error) {
+	r.status.Store(RotatingStatus)
+	defer r.status.Store(WritingStatus)
+
 	if r.compress {
-		if err := r.cps(); err != nil {
+		if err = r.cps(); err != nil {
 			return err
 		}
 	}
@@ -237,7 +262,7 @@ func (r *Rotator) rotate() error {
 		_ = r.f.Close()
 	}
 
-	f, err := os.OpenFile(r.newFile(), os.O_RDONLY|os.O_CREATE|os.O_APPEND, 0666)
+	f, err := os.OpenFile(r.newFile(), os.O_CREATE|os.O_RDWR, 0644)
 	if err != nil {
 		return err
 	}
@@ -249,7 +274,7 @@ func (r *Rotator) rotate() error {
 // cps 执行压缩操作
 func (r *Rotator) cps() error {
 	wf := compressFn(r.f.Name(), r.compressType)
-	w, err := os.OpenFile(wf, os.O_CREATE|os.O_APPEND|os.O_APPEND, 0666)
+	w, err := os.OpenFile(wf, os.O_RDWR|os.O_CREATE, 0644)
 	if err != nil {
 		return err
 	}
@@ -263,6 +288,9 @@ func (r *Rotator) cps() error {
 }
 
 func (r *Rotator) Close() {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
 	r.sig.Store(1)
 	if r.f == nil {
 		return
@@ -273,15 +301,15 @@ func (r *Rotator) Close() {
 
 // newFile 新的文件名称，组合日期(年月日)和当天的文件计数器来生成唯一的文件名称
 func (r *Rotator) newFile() string {
-	t := time.Now().Format("20060102")
-	newFile := fmt.Sprintf("%s/%s/%s_%s_%04d.log", r.dir, t, r.filename, t, r.counter.Load())
+	t := time.Now().Format(Layout)
+	const template = "%s/%s/%s_%s_%04d.log"
+	newFile := fmt.Sprintf(template, r.dir, t, r.filename, t, r.counter.Load())
 	r.counter.Add(1)
 	return newFile
 }
 
 // mkdirAll 创建文件目录，文件父目录是年月日时间，初始化时候会创建当天的目录，定时任务每天凌晨00:00会创建第二天的目录
 func (r *Rotator) mkdirAll() error {
-	t := time.Now().Format("20060102")
-	dir := fmt.Sprintf("%s/%s", r.dir, t)
-	return os.MkdirAll(dir, 0777)
+	t := time.Now().Format(Layout)
+	return os.MkdirAll(fmt.Sprintf("%s/%s", r.dir, t), 0777)
 }

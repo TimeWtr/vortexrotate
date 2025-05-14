@@ -14,14 +14,26 @@
 
 package vortexrotate
 
-import (
-	"errors"
-)
+import "sync"
 
-var (
-	ErrCompressType = errors.New("compress type not support")
-	ErrTimeType     = errors.New("rotate cron time type not support")
-	ErrRotateClosed = errors.New("rotate is closed")
-)
+// OnceWithError once执行返回运行的错误信息
+type OnceWithError struct {
+	nocopy noCopy
+	once   sync.Once
+	err    error
+}
 
-var ErrFilename = errors.New("filename must contain exactly one '.' character")
+func (o *OnceWithError) Do(f func() error) {
+	o.once.Do(func() {
+		o.err = f()
+	})
+}
+
+func (o *OnceWithError) Err() error {
+	return o.err
+}
+
+type noCopy struct{}
+
+func (*noCopy) Lock()   {}
+func (*noCopy) Unlock() {}
