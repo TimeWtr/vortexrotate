@@ -31,7 +31,6 @@ type TimingType string
 
 const (
 	_Second TimingType = "second"
-	_Minute TimingType = "minute"
 	Hour    TimingType = "hour"
 	Day     TimingType = "day"
 	Week    TimingType = "week"
@@ -44,7 +43,7 @@ func (t TimingType) String() string {
 
 func (t TimingType) Valid() bool {
 	switch t {
-	case _Second, _Minute, Hour, Day, Week, Month:
+	case _Second, Hour, Day, Week, Month:
 		return true
 	default:
 		return false
@@ -130,21 +129,25 @@ func (s *MixStrategy) ShouldRotate(writeSize uint64) bool {
 	return true
 }
 
+// asyncWorker 开启定时任务执行轮转判断逻辑，定时任务表达式根据定时任务类型确定
+// _Second: 不支持秒级的定时任务，这个只用于单元测试
+// Hour: 每隔一小时执行一次，0 0 * * * *
+// Day: 每天凌晨0点执行一次，0 0 0 * * *
+// Week: 每周一凌晨0点执行一次，0 0 0 * * 1
+// Month: 每月1号凌晨0点执行一次，0 0 0 1 * *
 func (s *MixStrategy) asyncWorker() error {
 	var cronStr string
 	switch s.tp {
 	case _Second:
 		cronStr = "*/1 * * * * *"
-	case _Minute:
-		cronStr = "@every 1m"
 	case Hour:
-		cronStr = "* 0 * * * *"
+		cronStr = "0 0 * * * *"
 	case Day:
-		cronStr = "* 0 0 * * *"
+		cronStr = "0 0 0 * * *"
 	case Week:
-		cronStr = "* 0 0 * * 0"
+		cronStr = "0 0 0 * * 1"
 	case Month:
-		cronStr = "* 0 0 1 * *"
+		cronStr = "0 0 0 1 * *"
 	default:
 		return ErrTimeType
 	}
