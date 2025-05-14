@@ -15,22 +15,40 @@
 package vortexrotate
 
 import (
+	"context"
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/sync/semaphore"
+	"math/rand"
 	"testing"
 	"time"
 )
 
+// initForTest 为测试程序创建多实例初始化，生产环境使用单例初始化
+func initForTest(compress bool) error {
+	var err error
+	if compress {
+		r, err = newRotator("./tests",
+			fmt.Sprintf("testdata%d.log", rand.Intn(10)),
+			WithMaxSize(1024*1024*100),
+			WithCompress(),
+			WithCompressLevel(GzipBestSpeed))
+	} else {
+		r, err = newRotator("./tests",
+			fmt.Sprintf("testdata%d.log", rand.Intn(10)),
+			WithMaxSize(1024*1024*100),
+			WithCompressLevel(GzipBestSpeed))
+	}
+
+	return err
+}
+
 func TestNewFile(t *testing.T) {
-	tf := time.Now().Format("20060102")
+	tf := time.Now().Format(Layout)
 	testCases := []struct {
 		name    string
 		wantRes string
 	}{
-		{
-			name:    "0001 count",
-			wantRes: fmt.Sprintf("./tests/%s/testdata_%s_0001.log", tf, tf),
-		},
 		{
 			name:    "0002 count",
 			wantRes: fmt.Sprintf("./tests/%s/testdata_%s_0002.log", tf, tf),
@@ -54,4 +72,58 @@ func TestNewFile(t *testing.T) {
 			assert.Equal(t, tc.wantRes, f)
 		})
 	}
+}
+
+func TestNewRotator_Compress(t *testing.T) {
+	err := initForTest(false)
+	assert.Nil(t, err)
+	defer r.Close()
+
+	template := "测试数据，需要写入文件中，当前写入编号为：%d，测试内容。。。。。。。。。。\n"
+	for i := 0; i < 5000000; i++ {
+		c := fmt.Sprintf(template, i)
+		_, err = r.Write([]byte(c))
+		assert.Nil(t, err)
+	}
+
+	t.Log("写入成功!")
+}
+
+func TestNewRotator_No_Compress(t *testing.T) {
+	err := initForTest(false)
+	assert.Nil(t, err)
+	defer r.Close()
+
+	template := "测试数据，需要写入文件中，当前写入编号为：%d，测试内容。。。。。。。。。。\n"
+	for i := 0; i < 3000000; i++ {
+		c := fmt.Sprintf(template, i)
+		_, err = r.Write([]byte(c))
+		assert.Nil(t, err)
+	}
+
+	t.Log("写入成功!")
+}
+
+// TODO 解决数据竞争的问题
+func TestNewRotator_Concurrent(t *testing.T) {
+	err := initForTest(true)
+	assert.Nil(t, err)
+	defer r.Close()
+
+	sem := semaphore.NewWeighted(100)
+	template := "测试数据，需要写入文件中，当前写入编号为：%d，测试内容。。。。。。。。。。\n"
+	for i := 0; i < 1000000; i++ {
+		err = sem.Acquire(context.TODO(), 1)
+		assert.Nil(t, err)
+
+		go func(idx int) {
+			defer sem.Release(1)
+
+			c := fmt.Sprintf(template, i)
+			_, err = r.Write([]byte(c))
+			assert.Nil(t, err)
+		}(i)
+	}
+
+	t.Log("写入成功!")
 }

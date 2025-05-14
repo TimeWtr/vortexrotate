@@ -14,14 +14,13 @@
 
 package vortexrotate
 
-import (
-	"errors"
-)
+const Layout = "20060102"
 
-var (
-	ErrCompressType = errors.New("compress type not support")
-	ErrTimeType     = errors.New("rotate cron time type not support")
-	ErrRotateClosed = errors.New("rotate is closed")
+const (
+	// DefaultPeriod 默认保存的天数，30天
+	DefaultPeriod = 30
+	// DefaultMaxCount 默认保存的最大文件数量，100个
+	DefaultMaxCount = 100
+	// DefaultMaxSize 默认单个日志文件保存的最大大小，100MB
+	DefaultMaxSize = 1024 * 1024 * 100
 )
-
-var ErrFilename = errors.New("filename must contain exactly one '.' character")
