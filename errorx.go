@@ -18,4 +18,5 @@ import "errors"
 
 var (
 	ErrCompressType = errors.New("compress type not support")
+	ErrTimeType     = errors.New("rotate cron time type not support")
 )

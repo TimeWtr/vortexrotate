@@ -8,7 +8,8 @@ ut:
 
 .PHONY: clean
 clean:
-	@cd tests && rm *.gz || true  && rm *.zst || true && rm *.snappy || true
+	@cd tests && ls | grep -v "test.log" | grep -v "test.reset.log" | xargs rm -rf
+	@cd tests && rm -rf *.snappy && rm -rf *.zst && rm -rf *.gz
 
 .PHONY: check
 check:

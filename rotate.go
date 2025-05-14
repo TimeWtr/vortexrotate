@@ -16,10 +16,13 @@ package vortexrotate
 
 import (
 	"compress/gzip"
+	"fmt"
 	"github.com/valyala/gozstd"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 const (
@@ -102,6 +105,8 @@ type Rotator struct {
 	dir string
 	// 基础的文件名称，后续轮转的名称在该基础名称上生成新的名称
 	filename string
+	// 文件后缀名
+	suffix string
 	// 当前写入的文件句柄
 	f *os.File
 	// 执行轮转的策略
@@ -128,19 +133,20 @@ type Rotator struct {
 	size atomic.Uint64
 	// 关闭信号
 	sig atomic.Int32
+	// 轮转计数器
+	counter atomic.Uint32
 }
 
 func NewRotator(dir, filename string, opts ...Option) (*Rotator, error) {
-	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		return nil, err
+	sli := strings.Split(filename, ".")
+	if len(sli) != 2 {
+		return nil, fmt.Errorf("filename must contain exactly one '.' character")
 	}
 
 	r := &Rotator{
 		dir:      dir,
-		filename: filename,
-		f:        f,
-		stg:      NewSizeStrategy(),
+		filename: sli[0],
+		suffix:   sli[1],
 		period:   DefaultPeriod,
 		maxCount: DefaultMaxCount,
 		maxSize:  DefaultMaxSize,
@@ -149,11 +155,26 @@ func NewRotator(dir, filename string, opts ...Option) (*Rotator, error) {
 	}
 	r.size.Store(0)
 	r.sig.Store(0)
+	r.counter.Store(0)
+
+	if err := r.mkdirAll(); err != nil {
+		return nil, err
+	}
+
+	f, err := os.OpenFile(r.newFile(), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		return nil, err
+	}
 
 	for _, opt := range opts {
 		if err = opt(r); err != nil {
 			return r, err
 		}
+	}
+
+	r.stg, err = NewMixStrategy(r.maxSize, Hour)
+	if err != nil {
+		return nil, err
 	}
 
 	if r.compress {
@@ -190,7 +211,7 @@ func (r *Rotator) Write(p []byte) (int, error) {
 		return 0, os.ErrClosed
 	}
 
-	if r.stg.ShouldRotate() {
+	if r.stg.ShouldRotate(uint64(len(p))) {
 		// 需要执行日志轮转
 		if err := r.rotate(); err != nil {
 			return 0, err
@@ -212,8 +233,11 @@ func (r *Rotator) rotate() error {
 			return err
 		}
 	}
+	if r.f != nil {
+		_ = r.f.Close()
+	}
 
-	f, err := os.OpenFile(r.stg.Filename(), os.O_RDONLY|os.O_CREATE|os.O_APPEND, 0666)
+	f, err := os.OpenFile(r.newFile(), os.O_RDONLY|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		return err
 	}
@@ -245,4 +269,19 @@ func (r *Rotator) Close() {
 	}
 
 	_ = r.f.Close()
+}
+
+// newFile 新的文件名称，组合日期(年月日)和当天的文件计数器来生成唯一的文件名称
+func (r *Rotator) newFile() string {
+	t := time.Now().Format("20060102")
+	newFile := fmt.Sprintf("%s/%s/%s_%s_%04d.log", r.dir, t, r.filename, t, r.counter.Load())
+	r.counter.Add(1)
+	return newFile
+}
+
+// mkdirAll 创建文件目录，文件父目录是年月日时间，初始化时候会创建当天的目录，定时任务每天凌晨00:00会创建第二天的目录
+func (r *Rotator) mkdirAll() error {
+	t := time.Now().Format("20060102")
+	dir := fmt.Sprintf("%s/%s", r.dir, t)
+	return os.MkdirAll(dir, 0777)
 }
