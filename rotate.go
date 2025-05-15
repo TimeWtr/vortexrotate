@@ -222,23 +222,19 @@ func (r *Rotator) Write(p []byte) (int, error) {
 
 	r.lock.Lock()
 	defer r.lock.Unlock()
-	for {
-		if r.status.Load() == WritingStatus {
-			break
-		}
-
-		time.Sleep(time.Millisecond)
-	}
-
 	if r.f == nil {
 		return 0, os.ErrClosed
 	}
 
+	if r.status.Load() == RejectStatus {
+		return 0, ErrRotateClosed
+	}
+
 	if r.stg.ShouldRotate(uint64(len(p))) {
 		// 需要执行日志轮转
-		//if err := r.rotate(); err != nil {
-		//	return 0, err
-		//}
+		if err := r.rotate(); err != nil {
+			return 0, err
+		}
 	}
 
 	n, err := r.f.Write(p)

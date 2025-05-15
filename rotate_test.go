@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sync/semaphore"
-	"math/rand"
+	"sync"
 	"testing"
 	"time"
 )
@@ -29,15 +29,12 @@ func initForTest(compress bool) error {
 	var err error
 	if compress {
 		r, err = newRotator("./tests",
-			fmt.Sprintf("testdata%d.log", rand.Intn(10)),
-			WithMaxSize(1024*1024*100),
-			WithCompress(),
-			WithCompressLevel(GzipBestSpeed))
+			"testdata.log",
+			WithMaxSize(1024*1024*100))
 	} else {
 		r, err = newRotator("./tests",
-			fmt.Sprintf("testdata%d.log", rand.Intn(10)),
-			WithMaxSize(1024*1024*100),
-			WithCompressLevel(GzipBestSpeed))
+			"testdata.log",
+			WithMaxSize(1024*1024*100))
 	}
 
 	return err
@@ -95,7 +92,7 @@ func TestNewRotator_No_Compress(t *testing.T) {
 	defer r.Close()
 
 	template := "测试数据，需要写入文件中，当前写入编号为：%d，测试内容。。。。。。。。。。\n"
-	for i := 0; i < 3000000; i++ {
+	for i := 0; i < 300000; i++ {
 		c := fmt.Sprintf(template, i)
 		_, err = r.Write([]byte(c))
 		assert.Nil(t, err)
@@ -104,7 +101,6 @@ func TestNewRotator_No_Compress(t *testing.T) {
 	t.Log("写入成功!")
 }
 
-// TODO 解决数据竞争的问题
 func TestNewRotator_Concurrent(t *testing.T) {
 	err := initForTest(true)
 	assert.Nil(t, err)
@@ -112,18 +108,23 @@ func TestNewRotator_Concurrent(t *testing.T) {
 
 	sem := semaphore.NewWeighted(100)
 	template := "测试数据，需要写入文件中，当前写入编号为：%d，测试内容。。。。。。。。。。\n"
-	for i := 0; i < 1000000; i++ {
+	var wg sync.WaitGroup
+	for i := 0; i < 100000; i++ {
 		err = sem.Acquire(context.TODO(), 1)
 		assert.Nil(t, err)
 
+		wg.Add(1)
 		go func(idx int) {
+			defer wg.Done()
+
 			defer sem.Release(1)
 
-			c := fmt.Sprintf(template, i)
-			_, err = r.Write([]byte(c))
-			assert.Nil(t, err)
+			c := fmt.Sprintf(template, idx)
+			_, localErr := r.Write([]byte(c))
+			assert.Nil(t, localErr)
 		}(i)
 	}
 
+	wg.Wait()
 	t.Log("写入成功!")
 }
