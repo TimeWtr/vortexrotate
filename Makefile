@@ -4,8 +4,7 @@ tidy:
 
 .PHONY: ut
 ut:
-	@#go test -race -v ./...
-	@go test ./...
+	@go test -race -v ./...
 
 .PHONY: clean
 clean:
