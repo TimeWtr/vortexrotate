@@ -19,6 +19,16 @@ import (
 	"time"
 )
 
+// Cleanup 清理过期文件的配置
+type Cleanup struct {
+	// 最大保留周期，天数
+	period uint16
+	// 保留的最大文件数量
+	maxCount uint16
+	// 清理过期文件的策略
+	cleanup CleanUpStrategy
+}
+
 type CleanUpStrategy interface {
 	CleanUp() error
 	Add()

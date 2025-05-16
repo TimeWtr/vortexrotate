@@ -43,6 +43,7 @@ const (
 	GzipHuffmanOnly        = gzip.HuffmanOnly
 )
 
+// compressFn 根据文件名和压缩类型生成压缩文件名
 func compressFn(fn string, tp int) string {
 	switch tp {
 	case CompressTypeGzip:
@@ -54,6 +55,16 @@ func compressFn(fn string, tp int) string {
 	default:
 		return ""
 	}
+}
+
+// Compress 压缩相关的配置
+type Compress struct {
+	// 是否执行压缩操作
+	compress bool
+	// 压缩类型(Gzip/Zstd/Snappy)
+	compressType int
+	// 压缩的策略
+	cs CompressStrategy
 }
 
 // CompressStrategy 压缩策略，对文件执行压缩操作

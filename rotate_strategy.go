@@ -15,6 +15,7 @@
 package vortexrotate
 
 import (
+	"github.com/TimeWtr/vortexrotate/errorx"
 	"github.com/robfig/cron/v3"
 	"log"
 	"os"
@@ -56,6 +57,8 @@ type RotateStrategy interface {
 	ShouldRotate(writeSize uint64) bool
 	// NotifyRotate 获取定时轮转信号
 	NotifyRotate() <-chan struct{}
+	// Close 关闭轮转策略
+	Close()
 }
 
 var _ RotateStrategy = (*MixStrategy)(nil)
@@ -91,7 +94,7 @@ type MixStrategy struct {
 
 func NewMixStrategy(maxSize uint64, tp TimingType) (*MixStrategy, error) {
 	if !tp.Valid() {
-		return nil, ErrTimeType
+		return nil, errorx.ErrTimeType
 	}
 
 	r := &MixStrategy{
@@ -149,7 +152,7 @@ func (s *MixStrategy) asyncWorker() error {
 	case Month:
 		cronStr = "0 0 0 1 * *"
 	default:
-		return ErrTimeType
+		return errorx.ErrTimeType
 	}
 
 	_, err := s.c.AddFunc(cronStr, func() {

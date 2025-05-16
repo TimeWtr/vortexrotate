@@ -16,8 +16,13 @@ package vortexrotate
 
 import (
 	"compress/gzip"
+	"context"
 	"fmt"
+	"github.com/TimeWtr/vortexrotate/errorx"
+	"github.com/TimeWtr/vortexrotate/pkg"
+	gr "github.com/sethvargo/go-retry"
 	"github.com/valyala/gozstd"
+	"log"
 	"os"
 	"strings"
 	"sync"
@@ -30,38 +35,42 @@ var (
 	onceWithError OnceWithError
 )
 
-const (
-	WritingStatus = iota
-	RotatingStatus
-	RejectStatus
-)
-
 type Option func(*Rotator) error
 
-// WithCompress 开启压缩
-func WithCompress() Option {
+// WithCompress 开启压缩，压缩算法提供gzip、zstd和snappy三种算法，
+// 当压缩算法为gzip时，可以设置压缩等级/级别，如果不设置，默认压缩级别
+// 为gzip.DefaultCompression
+func WithCompress(tp int, level ...int) Option {
 	return func(r *Rotator) error {
-		r.compress = true
-		return nil
-	}
-}
-
-// WithCompressType 压缩的算法类型
-func WithCompressType(tp int) Option {
-	return func(r *Rotator) error {
+		r.cpr.compress = true
 		if tp < _minCompressType || tp > _maxCompressType {
-			return ErrCompressType
+			return errorx.ErrCompressType
 		}
 
-		r.compressType = tp
-		return nil
-	}
-}
+		r.cpr.compressType = tp
+		var compressLevel int
+		if len(level) > 0 {
+			compressLevel = level[0]
+		} else {
+			if tp == CompressTypeGzip {
+				compressLevel = gzip.DefaultCompression
+			}
+		}
 
-// WithCompressLevel 压缩的级别
-func WithCompressLevel(level int) Option {
-	return func(r *Rotator) error {
-		r.compressLevel = level
+		switch tp {
+		case CompressTypeGzip:
+			cs, err := NewGzip(nil, r.f, compressLevel)
+			if err != nil {
+				return err
+			}
+			r.cpr.cs = cs
+		case CompressTypeZstd:
+			r.cpr.cs = NewZstd(nil, r.f, gozstd.DefaultCompressionLevel)
+		case CompressTypeSnappy:
+			r.cpr.cs = NewSnappy(nil, r.f)
+		default:
+		}
+
 		return nil
 	}
 }
@@ -69,7 +78,7 @@ func WithCompressLevel(level int) Option {
 // WithPeriod 设置保存周期
 func WithPeriod(period uint16) Option {
 	return func(r *Rotator) error {
-		r.period = period
+		r.cleanup.period = period
 		return nil
 	}
 }
@@ -77,15 +86,26 @@ func WithPeriod(period uint16) Option {
 // WithMaxCount 设置保存的最大文件数量
 func WithMaxCount(count uint16) Option {
 	return func(r *Rotator) error {
-		r.maxCount = count
+		r.cleanup.maxCount = count
 		return nil
 	}
 }
 
-// WithMaxSize 设置单个文件写入的最大字节
-func WithMaxSize(maxSize uint64) Option {
+// WithRotate 设置轮转配置，maxSize设置单个文件写入的最大字节，默认为100MB，当超过
+// 限制后强制立即执行轮转，后台定时轮转的时间类型:
+// Hour：一小时定时执行一次轮转
+// Day：一天定时执行一次轮转
+// Week：一周定时执行一次轮转
+// Month: 一个月定时执行一次轮转
+// 默认定时执行的时间类型是Hour。
+func WithRotate(maxSize uint64, tp TimingType) Option {
 	return func(r *Rotator) error {
-		r.maxSize = maxSize
+		stg, err := NewMixStrategy(maxSize, tp)
+		if err != nil {
+			return err
+		}
+		r.stg = stg
+
 		return nil
 	}
 }
@@ -100,35 +120,25 @@ type Rotator struct {
 	// 基础的文件名称，后续轮转的名称在该基础名称上生成新的名称
 	filename string
 	// 文件后缀名
-	suffix string
+	ext string
 	// 当前写入的文件句柄
 	f *os.File
 	// 执行轮转的策略
 	stg RotateStrategy
-	// 锁保护
-	lock sync.RWMutex
-	// 当前的状态：写入、拒绝写入、轮转中
-	status atomic.Uint32
-	// 最大保留周期，天数
-	period uint16
-	// 保留的最大文件数量
-	maxCount uint16
-	// 清理过期文件的策略
-	cleanup CleanUpStrategy
-	// 是否执行压缩操作
-	compress bool
-	// 压缩类型(Gzip/Zstd)
-	compressType int
-	// 压缩级别
-	compressLevel int
-	// 压缩的策略
-	cs CompressStrategy
-	// 单个文件最大的大小
-	maxSize uint64
+	// 文件写入锁保护
+	writeLock sync.RWMutex
+	// 压缩锁
+	compressLock sync.Mutex
+	// 压缩配置
+	cpr Compress
+	// 清理过期文件的配置
+	cleanup Cleanup
 	// 关闭信号
 	sig atomic.Int32
 	// 轮转计数器
 	counter atomic.Uint32
+	// 日志
+	l *log.Logger
 }
 
 // NewRotator 生产环境单例模式
@@ -149,19 +159,20 @@ func NewRotator(dir string, filename string, opts ...Option) (*Rotator, error) {
 func newRotator(dir, filename string, opts ...Option) (*Rotator, error) {
 	sli := strings.Split(filename, ".")
 	if len(sli) != 2 {
-		return nil, ErrFilename
+		return nil, errorx.ErrFilename
 	}
 
 	var rotator *Rotator
 	rotator = &Rotator{
 		dir:      dir,
 		filename: sli[0],
-		suffix:   sli[1],
-		period:   DefaultPeriod,
-		maxCount: DefaultMaxCount,
-		maxSize:  DefaultMaxSize,
-		compress: false,
-		lock:     sync.RWMutex{},
+		ext:      sli[1],
+		cleanup: Cleanup{
+			period:   DefaultPeriod,
+			maxCount: DefaultMaxCount,
+		},
+		writeLock: sync.RWMutex{},
+		l:         log.New(os.Stdout, "", log.LstdFlags),
 	}
 
 	rotator.sig.Store(0)
@@ -176,7 +187,6 @@ func newRotator(dir, filename string, opts ...Option) (*Rotator, error) {
 		return nil, err
 	}
 	rotator.f = f
-	rotator.status.Store(WritingStatus)
 
 	for _, opt := range opts {
 		if err = opt(rotator); err != nil {
@@ -184,31 +194,18 @@ func newRotator(dir, filename string, opts ...Option) (*Rotator, error) {
 		}
 	}
 
-	rotator.stg, err = NewMixStrategy(rotator.maxSize, Hour)
-	if err != nil {
-		return nil, err
-	}
-
-	if rotator.compress {
-		// 如果没有设置压缩类型，默认使用Gzip压缩
-		if rotator.compressType == CompressTypeUnknown {
-			rotator.compressType = CompressTypeGzip
-			rotator.cs, err = NewGzip(nil, f, GzipBestSpeed)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		if rotator.compressLevel == 0 {
-			if rotator.compressType == CompressTypeGzip {
-				rotator.compressLevel = gzip.DefaultCompression
-			}
-
-			if rotator.compressType == CompressTypeZstd {
-				rotator.compressLevel = gozstd.DefaultCompressionLevel
-			}
+	if pkg.IsNil(rotator.stg) {
+		rotator.stg, err = NewMixStrategy(DefaultMaxSize, Hour)
+		if err != nil {
+			return nil, err
 		}
 	}
+
+	if rotator.cpr.compress && rotator.cpr.cs == nil {
+		return nil, errorx.ErrCompress
+	}
+
+	go rotator.asyncWork()
 
 	return rotator, nil
 }
@@ -217,17 +214,13 @@ func newRotator(dir, filename string, opts ...Option) (*Rotator, error) {
 // 轮转后根据压缩配置执行压缩逻辑
 func (r *Rotator) Write(p []byte) (int, error) {
 	if r.sig.Load() == 1 {
-		return 0, ErrRotateClosed
+		return 0, errorx.ErrRotateClosed
 	}
 
-	r.lock.Lock()
-	defer r.lock.Unlock()
+	r.writeLock.Lock()
+	defer r.writeLock.Unlock()
 	if r.f == nil {
 		return 0, os.ErrClosed
-	}
-
-	if r.status.Load() == RejectStatus {
-		return 0, ErrRotateClosed
 	}
 
 	if r.stg.ShouldRotate(uint64(len(p))) {
@@ -246,20 +239,33 @@ func (r *Rotator) Write(p []byte) (int, error) {
 }
 
 func (r *Rotator) rotate() (err error) {
-	r.status.Store(RotatingStatus)
-	defer r.status.Store(WritingStatus)
-
-	if r.compress {
-		if err = r.cps(); err != nil {
-			return err
-		}
-	}
-	if r.f != nil {
-		_ = r.f.Close()
+	if r.cpr.compress {
+		//go func(oldPath string) {
+		//	r.l.Printf("rotate old file %s", oldPath)
+		//	//ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		//	//defer cancel()
+		//	//err = gr.Exponential(ctx, time.Millisecond*5, func(ctx context.Context) error {
+		//	//	select {
+		//	//	case <-ctx.Done():
+		//	//		return ctx.Err()
+		//	//	default:
+		//	//	}
+		//	if err = r.cps(oldPath); err != nil {
+		//		fmt.Println("failed to cpr, cause: ", err.Error())
+		//		return
+		//	}
+		//	//
+		//	//	return nil
+		//	//})
+		//}(r.f.Name())
 	}
 
 	f, err := os.OpenFile(r.newFile(), os.O_CREATE|os.O_RDWR, 0644)
 	if err != nil {
+		return err
+	}
+
+	if err = r.f.Close(); err != nil {
 		return err
 	}
 	r.f = f
@@ -268,15 +274,20 @@ func (r *Rotator) rotate() (err error) {
 }
 
 // cps 执行压缩操作
-func (r *Rotator) cps() error {
-	wf := compressFn(r.f.Name(), r.compressType)
-	w, err := os.OpenFile(wf, os.O_RDWR|os.O_CREATE, 0644)
+func (r *Rotator) cps(oldPath string) error {
+	wf := compressFn(oldPath, r.cpr.compressType)
+	w, err := os.OpenFile(wf, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}
 
-	r.cs.Reset(w, r.f)
-	if err = r.cs.Compress(); err != nil {
+	f, err := os.Open(oldPath)
+	if err != nil {
+		return err
+	}
+
+	r.cpr.cs.Reset(w, f)
+	if err = r.cpr.cs.Compress(); err != nil {
 		return err
 	}
 
@@ -284,8 +295,8 @@ func (r *Rotator) cps() error {
 }
 
 func (r *Rotator) Close() {
-	r.lock.Lock()
-	defer r.lock.Unlock()
+	r.writeLock.Lock()
+	defer r.writeLock.Unlock()
 
 	r.sig.Store(1)
 	if r.f == nil {
@@ -293,6 +304,7 @@ func (r *Rotator) Close() {
 	}
 
 	_ = r.f.Close()
+	r.stg.Close()
 }
 
 // newFile 新的文件名称，组合日期(年月日)和当天的文件计数器来生成唯一的文件名称
@@ -308,4 +320,45 @@ func (r *Rotator) newFile() string {
 func (r *Rotator) mkdirAll() error {
 	t := time.Now().Format(Layout)
 	return os.MkdirAll(fmt.Sprintf("%s/%s", r.dir, t), 0777)
+}
+
+// asyncWork 异步任务，用于接收定时轮转的信号，接收到之后立即执行文件轮转
+func (r *Rotator) asyncWork() {
+	notify := r.stg.NotifyRotate()
+	ticker := time.NewTicker(time.Millisecond * 10)
+	defer ticker.Stop()
+
+	var err error
+	for range ticker.C {
+		//if r.sig.Load() == 1 {
+		//	r.l.Println("async work received rotate stopped sig")
+		//	return
+		//}
+
+		select {
+		case _, ok := <-notify:
+			if !ok {
+				r.l.Println("notify channel closed")
+				return
+			}
+
+			r.writeLock.Lock()
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+			err = gr.Exponential(ctx, time.Millisecond*5, func(ctx context.Context) error {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				default:
+				}
+
+				return r.rotate()
+			})
+			cancel()
+			r.writeLock.Unlock()
+			if err != nil {
+				r.l.Printf("asyncWork: rotate error: %v", err)
+			}
+		default:
+		}
+	}
 }

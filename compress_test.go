@@ -40,7 +40,7 @@ func TestNewGzip_Compress(t *testing.T) {
 	assert.NoError(t, err)
 	err = gs.Compress()
 	assert.NoError(t, err)
-	t.Log("Gzip compress finished")
+	t.Log("Gzip cpr finished")
 }
 
 func TestNewGzip_Reset(t *testing.T) {
@@ -62,7 +62,7 @@ func TestNewGzip_Reset(t *testing.T) {
 	err = gs.Compress()
 	assert.NoError(t, err)
 
-	t.Log("Gzip compress finished")
+	t.Log("Gzip cpr finished")
 
 	w, err = os.OpenFile(filepath.Join("./tests",
 		compressFn("test.reset", CompressTypeGzip)), os.O_CREATE|os.O_RDWR, 0644)
@@ -80,7 +80,7 @@ func TestNewGzip_Reset(t *testing.T) {
 	gs.Reset(w, f)
 	err = gs.Compress()
 	assert.NoError(t, err)
-	t.Log("Gzip reset compress finished")
+	t.Log("Gzip reset cpr finished")
 }
 
 func TestNewZstd_Compress(t *testing.T) {
@@ -100,7 +100,7 @@ func TestNewZstd_Compress(t *testing.T) {
 	zstd := NewZstd(w, f, gozstd.DefaultCompressionLevel)
 	err = zstd.Compress()
 	assert.NoError(t, err)
-	t.Log("Zstd compress finished")
+	t.Log("Zstd cpr finished")
 }
 
 func TestNewZstd_Reset(t *testing.T) {
@@ -120,7 +120,7 @@ func TestNewZstd_Reset(t *testing.T) {
 	zstd := NewZstd(w, f, gozstd.DefaultCompressionLevel)
 	err = zstd.Compress()
 	assert.NoError(t, err)
-	t.Log("Zstd compress finished")
+	t.Log("Zstd cpr finished")
 
 	w, err = os.OpenFile(filepath.Join("./tests",
 		compressFn("test.reset", CompressTypeZstd)), os.O_CREATE|os.O_RDWR, 0644)
@@ -138,7 +138,7 @@ func TestNewZstd_Reset(t *testing.T) {
 	zstd.Reset(w, f)
 	err = zstd.Compress()
 	assert.NoError(t, err)
-	t.Log("Zstd reset compress finished")
+	t.Log("Zstd reset cpr finished")
 }
 
 func TestNewSnappy_Compress(t *testing.T) {
@@ -158,7 +158,7 @@ func TestNewSnappy_Compress(t *testing.T) {
 	snappy := NewSnappy(w, f)
 	err = snappy.Compress()
 	assert.NoError(t, err)
-	t.Log("Snappy compress finished")
+	t.Log("Snappy cpr finished")
 }
 
 func TestNewSnappy_Reset(t *testing.T) {
@@ -178,7 +178,7 @@ func TestNewSnappy_Reset(t *testing.T) {
 	s := NewSnappy(w, f)
 	err = s.Compress()
 	assert.NoError(t, err)
-	t.Log("Snappy compress finished")
+	t.Log("Snappy cpr finished")
 
 	w, err = os.OpenFile(filepath.Join("./tests",
 		compressFn("test.reset", CompressTypeSnappy)), os.O_CREATE|os.O_RDWR, 0644)
@@ -196,5 +196,5 @@ func TestNewSnappy_Reset(t *testing.T) {
 	s.Reset(w, f)
 	err = s.Compress()
 	assert.NoError(t, err)
-	t.Log("Snappy reset compress finished")
+	t.Log("Snappy reset cpr finished")
 }
