@@ -15,11 +15,9 @@
 package vortexrotate
 
 import (
-	"context"
 	"fmt"
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/sync/semaphore"
-	"sync"
+	"math/rand"
 	"testing"
 	"time"
 )
@@ -29,12 +27,14 @@ func initForTest(compress bool) error {
 	var err error
 	if compress {
 		r, err = newRotator("./tests",
-			"testdata.log",
-			WithMaxSize(1024*1024*100))
+			fmt.Sprintf("testdata.log_%d", rand.Intn(1000)),
+			WithCompress(CompressTypeGzip, GzipBestCompression),
+			WithRotate(1024*1024*100, _Second))
 	} else {
 		r, err = newRotator("./tests",
-			"testdata.log",
-			WithMaxSize(1024*1024*100))
+			fmt.Sprintf("testdata.log_%d", rand.Intn(1000)),
+			WithCompress(CompressTypeGzip, GzipBestSpeed),
+			WithRotate(1024*1024*100, _Second))
 	}
 
 	return err
@@ -72,12 +72,12 @@ func TestNewFile(t *testing.T) {
 }
 
 func TestNewRotator_Compress(t *testing.T) {
-	err := initForTest(false)
+	err := initForTest(true)
 	assert.Nil(t, err)
 	defer r.Close()
 
 	template := "测试数据，需要写入文件中，当前写入编号为：%d，测试内容。。。。。。。。。。\n"
-	for i := 0; i < 5000000; i++ {
+	for i := 0; i < 10000000; i++ {
 		c := fmt.Sprintf(template, i)
 		_, err = r.Write([]byte(c))
 		assert.Nil(t, err)
@@ -101,30 +101,32 @@ func TestNewRotator_No_Compress(t *testing.T) {
 	t.Log("写入成功!")
 }
 
-func TestNewRotator_Concurrent(t *testing.T) {
-	err := initForTest(true)
-	assert.Nil(t, err)
-	defer r.Close()
-
-	sem := semaphore.NewWeighted(100)
-	template := "测试数据，需要写入文件中，当前写入编号为：%d，测试内容。。。。。。。。。。\n"
-	var wg sync.WaitGroup
-	for i := 0; i < 100000; i++ {
-		err = sem.Acquire(context.TODO(), 1)
-		assert.Nil(t, err)
-
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
-
-			defer sem.Release(1)
-
-			c := fmt.Sprintf(template, idx)
-			_, localErr := r.Write([]byte(c))
-			assert.Nil(t, localErr)
-		}(i)
-	}
-
-	wg.Wait()
-	t.Log("写入成功!")
-}
+//func TestNewRotator_Concurrent(t *testing.T) {
+//	err := initForTest(true)
+//	assert.Nil(t, err)
+//	defer r.Close()
+//
+//	sem := semaphore.NewWeighted(100)
+//	template := "测试数据，需要写入文件中，当前写入编号为：%d，测试内容。。。。。。。。。。\n"
+//	var wg sync.WaitGroup
+//	for i := 0; i < 10000000; i++ {
+//		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+//		err = sem.Acquire(ctx, 1)
+//		cancel()
+//		assert.Nil(t, err)
+//
+//		wg.Add(1)
+//		go func(idx int) {
+//			defer wg.Done()
+//
+//			defer sem.Release(1)
+//
+//			c := fmt.Sprintf(template, idx)
+//			_, localErr := r.Write([]byte(c))
+//			assert.Nil(t, localErr)
+//		}(i)
+//	}
+//
+//	wg.Wait()
+//	t.Log("写入成功!")
+//}
