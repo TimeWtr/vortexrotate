@@ -19,7 +19,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/TimeWtr/vortexrotate/errorx"
-	"github.com/TimeWtr/vortexrotate/pkg"
 	gr "github.com/sethvargo/go-retry"
 	"github.com/valyala/gozstd"
 	"log"
@@ -194,7 +193,7 @@ func newRotator(dir, filename string, opts ...Option) (*Rotator, error) {
 		}
 	}
 
-	if pkg.IsNil(rotator.stg) {
+	if IsNil(rotator.stg) {
 		rotator.stg, err = NewMixStrategy(DefaultMaxSize, Hour)
 		if err != nil {
 			return nil, err
@@ -304,7 +303,7 @@ func (r *Rotator) Close() {
 	}
 
 	_ = r.f.Close()
-	r.stg.Close()
+	//r.stg.Close()
 }
 
 // newFile 新的文件名称，组合日期(年月日)和当天的文件计数器来生成唯一的文件名称
@@ -330,11 +329,6 @@ func (r *Rotator) asyncWork() {
 
 	var err error
 	for range ticker.C {
-		//if r.sig.Load() == 1 {
-		//	r.l.Println("async work received rotate stopped sig")
-		//	return
-		//}
-
 		select {
 		case _, ok := <-notify:
 			if !ok {

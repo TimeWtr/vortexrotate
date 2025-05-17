@@ -14,5 +14,5 @@ clean:
 .PHONY: check
 check:
 	@$(MAKE) --no-print-directory tidy
-	@#$(MAKE) --no-print-directory ut
+	@$(MAKE) --no-print-directory ut
 	@$(MAKE) --no-print-directory clean
