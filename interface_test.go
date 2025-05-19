@@ -12,26 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package pkg
+package vortexrotate
 
 import (
-	"github.com/TimeWtr/vortexrotate"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNil(t *testing.T) {
 	res := IsNil(interface{}(nil))
 	assert.Equal(t, true, res)
 
-	var i vortexrotate.RotateStrategy
+	var i RotateStrategy
 	res = IsNil(i)
 	assert.Equal(t, true, res)
 }
 
 func TestIsNil(t *testing.T) {
 	type test struct {
-		stg vortexrotate.RotateStrategy
+		stg RotateStrategy
 	}
 	app := &test{}
 	if IsNil(app.stg) {
@@ -40,7 +40,7 @@ func TestIsNil(t *testing.T) {
 		t.Log("not nil")
 	}
 
-	stg, err := vortexrotate.NewMixStrategy(1024, vortexrotate._Second)
+	stg, err := NewMixStrategy(1024, "second")
 	assert.Nil(t, err)
 	app.stg = stg
 	if IsNil(app.stg) {

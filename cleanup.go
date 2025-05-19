@@ -25,8 +25,6 @@ type Cleanup struct {
 	period uint16
 	// 保留的最大文件数量
 	maxCount uint16
-	// 清理过期文件的策略
-	cleanup CleanUpStrategy
 }
 
 type CleanUpStrategy interface {

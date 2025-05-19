@@ -16,12 +16,13 @@ package vortexrotate
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
-	"golang.org/x/sync/semaphore"
 	"math/rand"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"golang.org/x/sync/semaphore"
 )
 
 func (s *MixStrategy) testSetLastTime(duration time.Duration) {
@@ -68,7 +69,6 @@ func TestNewMixStrategy(t *testing.T) {
 				t.Logf("should rotate, index: %d, size: %d\n", i, size)
 				continue
 			}
-			//t.Logf("should not rotate, write data successfully, index: %d, size: %d\n", i, size)
 			time.Sleep(time.Duration(rand.Intn(50)) * time.Millisecond)
 		}
 	}()
@@ -115,10 +115,8 @@ func TestNewMixStrategy_Concurrent(t *testing.T) {
 				ms.testSetLastTime(150 * time.Millisecond)
 				size := uint64(rand.Intn(200))
 				if ms.ShouldRotate(size) {
-					t.Logf("should rotate, index: %d, size: %d\n", i, size)
 					return
 				}
-				//t.Logf("should not rotate, write data successfully, index: %d, size: %d\n", i, size)
 				time.Sleep(time.Duration(rand.Intn(50)) * time.Millisecond)
 			}()
 		}

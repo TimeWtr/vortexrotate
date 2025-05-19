@@ -15,12 +15,13 @@
 package vortexrotate
 
 import (
-	"github.com/TimeWtr/vortexrotate/errorx"
-	"github.com/robfig/cron/v3"
 	"log"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/TimeWtr/vortexrotate/errorx"
+	"github.com/robfig/cron/v3"
 )
 
 const (
@@ -97,7 +98,7 @@ func NewMixStrategy(maxSize uint64, tp TimingType) (*MixStrategy, error) {
 		return nil, errorx.ErrTimeType
 	}
 
-	r := &MixStrategy{
+	stg := &MixStrategy{
 		maxSize: maxSize,
 		lock:    sync.Mutex{},
 		events:  make(chan struct{}),
@@ -106,11 +107,11 @@ func NewMixStrategy(maxSize uint64, tp TimingType) (*MixStrategy, error) {
 		lg:      log.New(os.Stdout, "", log.LstdFlags),
 	}
 
-	if err := r.asyncWorker(); err != nil {
+	if err := stg.asyncWorker(); err != nil {
 		return nil, err
 	}
 
-	return r, nil
+	return stg, nil
 }
 
 func (s *MixStrategy) NotifyRotate() <-chan struct{} {

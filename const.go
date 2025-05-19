@@ -14,6 +14,8 @@
 
 package vortexrotate
 
+import "os"
+
 const Layout = "20060102"
 
 const (
@@ -23,4 +25,10 @@ const (
 	DefaultMaxCount = 100
 	// DefaultMaxSize 默认单个日志文件保存的最大大小，100MB
 	DefaultMaxSize = 1024 * 1024 * 100
+)
+
+// 文件系统操作权限组
+const (
+	ReadOnlyFile  os.FileMode = 0o444 // 只读文件
+	ReadWriteFile os.FileMode = 0o644 // 读写文件
 )
