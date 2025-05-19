@@ -115,7 +115,6 @@ func TestNewMixStrategy_Concurrent(t *testing.T) {
 				ms.testSetLastTime(150 * time.Millisecond)
 				size := uint64(rand.Intn(200))
 				if ms.ShouldRotate(size) {
-					t.Logf("should rotate, index: %d, size: %d\n", i, size)
 					return
 				}
 				time.Sleep(time.Duration(rand.Intn(50)) * time.Millisecond)

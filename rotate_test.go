@@ -86,8 +86,6 @@ func TestNewRotator_Compress(t *testing.T) {
 		_, err = r.Write([]byte(c))
 		assert.Nil(t, err)
 	}
-
-	t.Log("写入成功!")
 }
 
 func TestNewRotator_No_Compress(t *testing.T) {
@@ -101,8 +99,6 @@ func TestNewRotator_No_Compress(t *testing.T) {
 		_, err = r.Write([]byte(c))
 		assert.Nil(t, err)
 	}
-
-	t.Log("写入成功!")
 }
 
 func TestNewRotator_Concurrent(t *testing.T) {
@@ -132,5 +128,4 @@ func TestNewRotator_Concurrent(t *testing.T) {
 	}
 
 	wg.Wait()
-	t.Log("写入成功!")
 }
