@@ -18,15 +18,16 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
-	"github.com/TimeWtr/vortexrotate/errorx"
-	gr "github.com/sethvargo/go-retry"
-	"github.com/valyala/gozstd"
 	"log"
 	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/TimeWtr/vortexrotate/errorx"
+	gr "github.com/sethvargo/go-retry"
+	"github.com/valyala/gozstd"
 )
 
 var (
@@ -50,10 +51,8 @@ func WithCompress(tp int, level ...int) Option {
 		var compressLevel int
 		if len(level) > 0 {
 			compressLevel = level[0]
-		} else {
-			if tp == CompressTypeGzip {
-				compressLevel = gzip.DefaultCompression
-			}
+		} else if tp == CompressTypeGzip {
+			compressLevel = gzip.DefaultCompression
 		}
 
 		switch tp {
@@ -126,8 +125,6 @@ type Rotator struct {
 	stg RotateStrategy
 	// 文件写入锁保护
 	writeLock sync.RWMutex
-	// 压缩锁
-	compressLock sync.Mutex
 	// 压缩配置
 	cpr Compress
 	// 清理过期文件的配置
@@ -141,7 +138,7 @@ type Rotator struct {
 }
 
 // NewRotator 生产环境单例模式
-func NewRotator(dir string, filename string, opts ...Option) (*Rotator, error) {
+func NewRotator(dir, filename string, opts ...Option) (*Rotator, error) {
 	onceWithError.Do(func() error {
 		rotator, err := newRotator(dir, filename, opts...)
 		if err != nil {
@@ -156,13 +153,13 @@ func NewRotator(dir string, filename string, opts ...Option) (*Rotator, error) {
 }
 
 func newRotator(dir, filename string, opts ...Option) (*Rotator, error) {
+	const fileNameSliLength = 2
 	sli := strings.Split(filename, ".")
-	if len(sli) != 2 {
+	if len(sli) != fileNameSliLength {
 		return nil, errorx.ErrFilename
 	}
 
-	var rotator *Rotator
-	rotator = &Rotator{
+	rotator := &Rotator{
 		dir:      dir,
 		filename: sli[0],
 		ext:      sli[1],
@@ -181,14 +178,14 @@ func newRotator(dir, filename string, opts ...Option) (*Rotator, error) {
 		return nil, err
 	}
 
-	f, err := os.OpenFile(rotator.newFile(), os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+	f, err := os.OpenFile(rotator.newFile(), os.O_CREATE|os.O_RDWR|os.O_APPEND, ReadWriteFile)
 	if err != nil {
 		return nil, err
 	}
 	rotator.f = f
 
 	for _, opt := range opts {
-		if err = opt(rotator); err != nil {
+		if err := opt(rotator); err != nil {
 			return nil, err
 		}
 	}
@@ -239,34 +236,35 @@ func (r *Rotator) Write(p []byte) (int, error) {
 
 func (r *Rotator) rotate() (err error) {
 	if r.cpr.compress {
-		//go func(oldPath string) {
-		//	r.l.Printf("rotate old file %s", oldPath)
-		//	//ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-		//	//defer cancel()
-		//	//err = gr.Exponential(ctx, time.Millisecond*5, func(ctx context.Context) error {
-		//	//	select {
-		//	//	case <-ctx.Done():
-		//	//		return ctx.Err()
-		//	//	default:
-		//	//	}
-		//	if err = r.cps(oldPath); err != nil {
-		//		fmt.Println("failed to cpr, cause: ", err.Error())
-		//		return
-		//	}
-		//	//
-		//	//	return nil
-		//	//})
-		//}(r.f.Name())
+		r.l.Printf("rotate old file %s", r.f.Name())
+		const (
+			ContextTimeout          = time.Second * 10
+			InitExponentialInterval = time.Millisecond * 5
+		)
+		ctxl, cancel := context.WithTimeout(context.Background(), ContextTimeout)
+		defer cancel()
+
+		err = gr.Exponential(ctxl, InitExponentialInterval, func(ctx context.Context) error {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+
+			if err = r.cps(r.f.Name()); err != nil {
+				fmt.Println("failed to cpr, cause: ", err.Error())
+				return err
+			}
+
+			return nil
+		})
 	}
 
-	f, err := os.OpenFile(r.newFile(), os.O_CREATE|os.O_RDWR, 0644)
+	f, err := os.OpenFile(r.newFile(), os.O_CREATE|os.O_RDWR, ReadWriteFile)
 	if err != nil {
 		return err
 	}
 
-	if err = r.f.Close(); err != nil {
-		return err
-	}
 	r.f = f
 
 	return nil
@@ -275,7 +273,7 @@ func (r *Rotator) rotate() (err error) {
 // cps 执行压缩操作
 func (r *Rotator) cps(oldPath string) error {
 	wf := compressFn(oldPath, r.cpr.compressType)
-	w, err := os.OpenFile(wf, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
+	w, err := os.OpenFile(wf, os.O_RDWR|os.O_CREATE|os.O_APPEND, ReadWriteFile)
 	if err != nil {
 		return err
 	}
@@ -286,7 +284,7 @@ func (r *Rotator) cps(oldPath string) error {
 	}
 
 	r.cpr.cs.Reset(w, f)
-	if err = r.cpr.cs.Compress(); err != nil {
+	if err := r.cpr.cs.Compress(); err != nil {
 		return err
 	}
 
@@ -303,7 +301,6 @@ func (r *Rotator) Close() {
 	}
 
 	_ = r.f.Close()
-	//r.stg.Close()
 }
 
 // newFile 新的文件名称，组合日期(年月日)和当天的文件计数器来生成唯一的文件名称
@@ -318,13 +315,19 @@ func (r *Rotator) newFile() string {
 // mkdirAll 创建文件目录，文件父目录是年月日时间，初始化时候会创建当天的目录，定时任务每天凌晨00:00会创建第二天的目录
 func (r *Rotator) mkdirAll() error {
 	t := time.Now().Format(Layout)
-	return os.MkdirAll(fmt.Sprintf("%s/%s", r.dir, t), 0777)
+	return os.MkdirAll(fmt.Sprintf("%s/%s", r.dir, t), os.ModePerm)
 }
 
 // asyncWork 异步任务，用于接收定时轮转的信号，接收到之后立即执行文件轮转
 func (r *Rotator) asyncWork() {
+	const (
+		ContextTimeout          = time.Second * 10
+		InitExponentialInterval = time.Millisecond * 5
+		TickerInterval          = time.Millisecond * 10
+	)
+
 	notify := r.stg.NotifyRotate()
-	ticker := time.NewTicker(time.Millisecond * 10)
+	ticker := time.NewTicker(TickerInterval)
 	defer ticker.Stop()
 
 	var err error
@@ -337,17 +340,18 @@ func (r *Rotator) asyncWork() {
 			}
 
 			r.writeLock.Lock()
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-			err = gr.Exponential(ctx, time.Millisecond*5, func(ctx context.Context) error {
+			ctx, cancel := context.WithTimeout(context.Background(), ContextTimeout)
+			err = gr.Exponential(ctx, InitExponentialInterval, func(ctx context.Context) error {
 				select {
 				case <-ctx.Done():
 					return ctx.Err()
 				default:
 				}
 
-				return r.rotate()
+				err = r.rotate()
+				cancel()
+				return err
 			})
-			cancel()
 			r.writeLock.Unlock()
 			if err != nil {
 				r.l.Printf("asyncWork: rotate error: %v", err)

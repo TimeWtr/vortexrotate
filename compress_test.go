@@ -15,22 +15,23 @@
 package vortexrotate
 
 import (
-	"github.com/stretchr/testify/assert"
-	"github.com/valyala/gozstd"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/valyala/gozstd"
 )
 
 func TestNewGzip_Compress(t *testing.T) {
-	w, err := os.OpenFile(filepath.Join("./tests",
-		compressFn("test.log", CompressTypeGzip)), os.O_CREATE|os.O_RDWR, 0644)
+	w, err := os.OpenFile(filepath.Join("tests",
+		compressFn("test.log", CompressTypeGzip)), os.O_CREATE|os.O_RDWR, ReadWriteFile)
 	assert.NoError(t, err)
 	if err != nil {
 		return
 	}
 
-	f, err := os.Open(filepath.Join("./tests", "test.log"))
+	f, err := os.Open(filepath.Join("tests", "test.log"))
 	assert.NoError(t, err)
 	if err != nil {
 		return
@@ -44,14 +45,14 @@ func TestNewGzip_Compress(t *testing.T) {
 }
 
 func TestNewGzip_Reset(t *testing.T) {
-	w, err := os.OpenFile(filepath.Join("./tests",
-		compressFn("test.log", CompressTypeGzip)), os.O_CREATE|os.O_RDWR, 0644)
+	w, err := os.OpenFile(filepath.Join("tests",
+		compressFn("test.log", CompressTypeGzip)), os.O_CREATE|os.O_RDWR, ReadWriteFile)
 	assert.NoError(t, err)
 	if err != nil {
 		return
 	}
 
-	f, err := os.Open(filepath.Join("./tests", "test.log"))
+	f, err := os.Open(filepath.Join("tests", "test.log"))
 	assert.NoError(t, err)
 	if err != nil {
 		return
@@ -64,14 +65,14 @@ func TestNewGzip_Reset(t *testing.T) {
 
 	t.Log("Gzip cpr finished")
 
-	w, err = os.OpenFile(filepath.Join("./tests",
-		compressFn("test.reset", CompressTypeGzip)), os.O_CREATE|os.O_RDWR, 0644)
+	w, err = os.OpenFile(filepath.Join("tests",
+		compressFn("test.reset", CompressTypeGzip)), os.O_CREATE|os.O_RDWR, ReadWriteFile)
 	assert.NoError(t, err)
 	if err != nil {
 		return
 	}
 
-	f, err = os.Open(filepath.Join("./tests", "test.reset.log"))
+	f, err = os.Open(filepath.Join("tests", "test.reset.log"))
 	assert.NoError(t, err)
 	if err != nil {
 		return
@@ -84,14 +85,14 @@ func TestNewGzip_Reset(t *testing.T) {
 }
 
 func TestNewZstd_Compress(t *testing.T) {
-	w, err := os.OpenFile(filepath.Join("./tests",
-		compressFn("test.log", CompressTypeZstd)), os.O_CREATE|os.O_RDWR, 0644)
+	w, err := os.OpenFile(filepath.Join("tests",
+		compressFn("test.log", CompressTypeZstd)), os.O_CREATE|os.O_RDWR, ReadWriteFile)
 	assert.NoError(t, err)
 	if err != nil {
 		return
 	}
 
-	f, err := os.Open(filepath.Join("./tests", "test.log"))
+	f, err := os.Open(filepath.Join("tests", "test.log"))
 	assert.NoError(t, err)
 	if err != nil {
 		return
@@ -104,14 +105,14 @@ func TestNewZstd_Compress(t *testing.T) {
 }
 
 func TestNewZstd_Reset(t *testing.T) {
-	w, err := os.OpenFile(filepath.Join("./tests",
-		compressFn("test.log", CompressTypeZstd)), os.O_CREATE|os.O_RDWR, 0644)
+	w, err := os.OpenFile(filepath.Join("tests",
+		compressFn("test.log", CompressTypeZstd)), os.O_CREATE|os.O_RDWR, ReadWriteFile)
 	assert.NoError(t, err)
 	if err != nil {
 		return
 	}
 
-	f, err := os.Open(filepath.Join("./tests", "test.log"))
+	f, err := os.Open(filepath.Join("tests", "test.log"))
 	assert.NoError(t, err)
 	if err != nil {
 		return
@@ -122,14 +123,14 @@ func TestNewZstd_Reset(t *testing.T) {
 	assert.NoError(t, err)
 	t.Log("Zstd cpr finished")
 
-	w, err = os.OpenFile(filepath.Join("./tests",
-		compressFn("test.reset", CompressTypeZstd)), os.O_CREATE|os.O_RDWR, 0644)
+	w, err = os.OpenFile(filepath.Join("tests",
+		compressFn("test.reset", CompressTypeZstd)), os.O_CREATE|os.O_RDWR, ReadWriteFile)
 	assert.NoError(t, err)
 	if err != nil {
 		return
 	}
 
-	f, err = os.Open(filepath.Join("./tests", "test.reset.log"))
+	f, err = os.Open(filepath.Join("tests", "test.reset.log"))
 	assert.NoError(t, err)
 	if err != nil {
 		return
@@ -142,14 +143,14 @@ func TestNewZstd_Reset(t *testing.T) {
 }
 
 func TestNewSnappy_Compress(t *testing.T) {
-	w, err := os.OpenFile(filepath.Join("./tests",
-		compressFn("test.log", CompressTypeSnappy)), os.O_CREATE|os.O_RDWR, 0644)
+	w, err := os.OpenFile(filepath.Join("tests",
+		compressFn("test.log", CompressTypeSnappy)), os.O_CREATE|os.O_RDWR, ReadWriteFile)
 	assert.NoError(t, err)
 	if err != nil {
 		return
 	}
 
-	f, err := os.Open(filepath.Join("./tests", "test.log"))
+	f, err := os.Open(filepath.Join("tests", "test.log"))
 	assert.NoError(t, err)
 	if err != nil {
 		return
@@ -162,14 +163,14 @@ func TestNewSnappy_Compress(t *testing.T) {
 }
 
 func TestNewSnappy_Reset(t *testing.T) {
-	w, err := os.OpenFile(filepath.Join("./tests",
-		compressFn("test.log", CompressTypeSnappy)), os.O_CREATE|os.O_RDWR, 0644)
+	w, err := os.OpenFile(filepath.Join("tests",
+		compressFn("test.log", CompressTypeSnappy)), os.O_CREATE|os.O_RDWR, ReadWriteFile)
 	assert.NoError(t, err)
 	if err != nil {
 		return
 	}
 
-	f, err := os.Open(filepath.Join("./tests", "test.log"))
+	f, err := os.Open(filepath.Join("tests", "test.log"))
 	assert.NoError(t, err)
 	if err != nil {
 		return
@@ -180,14 +181,14 @@ func TestNewSnappy_Reset(t *testing.T) {
 	assert.NoError(t, err)
 	t.Log("Snappy cpr finished")
 
-	w, err = os.OpenFile(filepath.Join("./tests",
-		compressFn("test.reset", CompressTypeSnappy)), os.O_CREATE|os.O_RDWR, 0644)
+	w, err = os.OpenFile(filepath.Join("tests",
+		compressFn("test.reset", CompressTypeSnappy)), os.O_CREATE|os.O_RDWR, ReadWriteFile)
 	assert.NoError(t, err)
 	if err != nil {
 		return
 	}
 
-	f, err = os.Open(filepath.Join("./tests", "test.reset.log"))
+	f, err = os.Open(filepath.Join("tests", "test.reset.log"))
 	assert.NoError(t, err)
 	if err != nil {
 		return

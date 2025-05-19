@@ -15,12 +15,13 @@
 package vortexrotate
 
 import (
-	"github.com/TimeWtr/vortexrotate/errorx"
-	"github.com/robfig/cron/v3"
 	"log"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/TimeWtr/vortexrotate/errorx"
+	"github.com/robfig/cron/v3"
 )
 
 const (

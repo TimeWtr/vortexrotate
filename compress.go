@@ -16,11 +16,13 @@ package vortexrotate
 
 import (
 	"compress/gzip"
+	"errors"
 	"fmt"
-	"github.com/golang/snappy"
-	"github.com/valyala/gozstd"
 	"io"
 	"os"
+
+	"github.com/golang/snappy"
+	"github.com/valyala/gozstd"
 )
 
 const (
@@ -107,11 +109,11 @@ func (g *Gzip) Compress() error {
 	bs := make([]byte, bufferSize)
 	for {
 		n, err := g.f.Read(bs)
-		if err != nil && err != io.EOF {
+		if err != nil && !errors.Is(err, io.EOF) {
 			return err
 		}
 
-		if n == 0 || err == io.EOF {
+		if n == 0 || errors.Is(err, io.EOF) {
 			break
 		}
 
@@ -157,11 +159,11 @@ func (z *Zstd) Compress() error {
 	bs := make([]byte, bufferSize)
 	for {
 		n, err := z.f.Read(bs)
-		if err != nil && err != io.EOF {
+		if err != nil && !errors.Is(err, io.EOF) {
 			return err
 		}
 
-		if err == io.EOF || n == 0 {
+		if errors.Is(err, io.EOF) || n == 0 {
 			break
 		}
 
@@ -205,11 +207,11 @@ func (s *Snappy) Compress() error {
 	bs := make([]byte, bufferSize)
 	for {
 		n, err := s.f.Read(bs)
-		if err != nil && err != io.EOF {
+		if err != nil && !errors.Is(err, io.EOF) {
 			return err
 		}
 
-		if err == io.EOF || n == 0 {
+		if errors.Is(err, io.EOF) || n == 0 {
 			break
 		}
 

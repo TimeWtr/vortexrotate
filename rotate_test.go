@@ -17,12 +17,13 @@ package vortexrotate
 import (
 	"context"
 	"fmt"
-	"github.com/stretchr/testify/assert"
-	"golang.org/x/sync/semaphore"
 	"math/rand"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"golang.org/x/sync/semaphore"
 )
 
 // initForTest 为测试程序创建多实例初始化，生产环境使用单例初始化
@@ -79,7 +80,7 @@ func TestNewRotator_Compress(t *testing.T) {
 	assert.Nil(t, err)
 	defer r.Close()
 
-	template := "测试数据，需要写入文件中，当前写入编号为：%d，测试内容。。。。。。。。。。\n"
+	const template = "测试数据，需要写入文件中，当前写入编号为：%d，测试内容。。。。。。。。。。\n"
 	for i := 0; i < 100000; i++ {
 		c := fmt.Sprintf(template, i)
 		_, err = r.Write([]byte(c))
