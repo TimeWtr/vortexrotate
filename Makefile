@@ -8,7 +8,7 @@ tidy:
 
 .PHONY: ut
 ut:
-	@go test -race -v ./...
+	@CGO_ENABLED=1 go test -race -v ./...
 
 .PHONY: lint
 lint:
@@ -21,8 +21,7 @@ clean:
 
 .PHONY: check
 check:
-	@true
-#	@$(MAKE) --no-print-directory setup
-#	@$(MAKE) --no-print-directory tidy
-#	@$(MAKE) --no-print-directory ut
-#	@$(MAKE) --no-print-directory clean
+	@$(MAKE) --no-print-directory setup
+	@$(MAKE) --no-print-directory tidy
+	@$(MAKE) --no-print-directory ut
+	@$(MAKE) --no-print-directory clean
