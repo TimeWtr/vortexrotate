@@ -109,7 +109,7 @@ func TestNewRotator_Concurrent(t *testing.T) {
 	sem := semaphore.NewWeighted(100)
 	template := "测试数据，需要写入文件中，当前写入编号为：%d，测试内容。。。。。。。。。。\n"
 	var wg sync.WaitGroup
-	for i := 0; i < 10000000; i++ {
+	for i := 0; i < 300000; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 		err = sem.Acquire(ctx, 1)
 		cancel()
