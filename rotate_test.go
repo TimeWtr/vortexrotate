@@ -31,14 +31,14 @@ func initForTest(compress bool) error {
 	var err error
 	if compress {
 		r, err = newRotator("./tests",
-			fmt.Sprintf("testdata.log_%d", rand.Intn(1000)),
+			fmt.Sprintf("testdata_%d.log", rand.Intn(1000)),
 			WithCompress(CompressTypeGzip, GzipBestCompression),
-			WithRotate(1024*1024*100, _Second))
+			WithRotate(1024*1024*10, _Second))
 	} else {
 		r, err = newRotator("./tests",
-			fmt.Sprintf("testdata.log_%d", rand.Intn(1000)),
+			fmt.Sprintf("testdata_%d.log", rand.Intn(1000)),
 			WithCompress(CompressTypeGzip, GzipBestSpeed),
-			WithRotate(1024*1024*100, _Second))
+			WithRotate(1024*1024*10, _Second))
 	}
 
 	return err
@@ -109,7 +109,7 @@ func TestNewRotator_Concurrent(t *testing.T) {
 	sem := semaphore.NewWeighted(100)
 	template := "测试数据，需要写入文件中，当前写入编号为：%d，测试内容。。。。。。。。。。\n"
 	var wg sync.WaitGroup
-	for i := 0; i < 100000; i++ {
+	for i := 0; i < 300000; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 		err = sem.Acquire(ctx, 1)
 		cancel()

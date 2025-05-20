@@ -16,7 +16,6 @@ package vortexrotate
 
 import (
 	"compress/gzip"
-	"context"
 	"fmt"
 	"log"
 	"os"
@@ -26,7 +25,6 @@ import (
 	"time"
 
 	"github.com/TimeWtr/vortexrotate/errorx"
-	gr "github.com/sethvargo/go-retry"
 	"github.com/valyala/gozstd"
 )
 
@@ -103,6 +101,7 @@ func WithRotate(maxSize uint64, tp TimingType) Option {
 			return err
 		}
 		r.stg = stg
+		r.maxSize = maxSize
 
 		return nil
 	}
@@ -135,6 +134,8 @@ type Rotator struct {
 	counter atomic.Uint32
 	// 日志
 	l *log.Logger
+	// 文件的最大写入字节
+	maxSize uint64
 }
 
 // NewRotator 生产环境单例模式
@@ -169,6 +170,7 @@ func newRotator(dir, filename string, opts ...Option) (*Rotator, error) {
 		},
 		writeLock: sync.RWMutex{},
 		l:         log.New(os.Stdout, "", log.LstdFlags),
+		maxSize:   DefaultMaxSize,
 	}
 
 	rotator.sig.Store(0)
@@ -235,29 +237,13 @@ func (r *Rotator) Write(p []byte) (int, error) {
 }
 
 func (r *Rotator) rotate() (err error) {
+	_ = r.f.Close()
 	if r.cpr.compress {
 		r.l.Printf("rotate old file %s", r.f.Name())
-		const (
-			ContextTimeout          = time.Second * 10
-			InitExponentialInterval = time.Millisecond * 5
-		)
-		ctxl, cancel := context.WithTimeout(context.Background(), ContextTimeout)
-		defer cancel()
-
-		err = gr.Exponential(ctxl, InitExponentialInterval, func(ctx context.Context) error {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-			}
-
-			if err = r.cps(r.f.Name()); err != nil {
-				fmt.Println("failed to cpr, cause: ", err.Error())
-				return err
-			}
-
-			return nil
-		})
+		if err = r.cps(r.f.Name()); err != nil {
+			fmt.Println("failed to cpr, cause: ", err.Error())
+			return err
+		}
 	}
 
 	f, err := os.OpenFile(r.newFile(), os.O_CREATE|os.O_RDWR, ReadWriteFile)
@@ -273,7 +259,7 @@ func (r *Rotator) rotate() (err error) {
 // cps 执行压缩操作
 func (r *Rotator) cps(oldPath string) error {
 	wf := compressFn(oldPath, r.cpr.compressType)
-	w, err := os.OpenFile(wf, os.O_RDWR|os.O_CREATE|os.O_APPEND, ReadWriteFile)
+	w, err := os.OpenFile(wf, os.O_RDWR|os.O_CREATE, ReadWriteFile)
 	if err != nil {
 		return err
 	}
@@ -330,7 +316,6 @@ func (r *Rotator) asyncWork() {
 	ticker := time.NewTicker(TickerInterval)
 	defer ticker.Stop()
 
-	var err error
 	for range ticker.C {
 		select {
 		case _, ok := <-notify:
@@ -340,18 +325,19 @@ func (r *Rotator) asyncWork() {
 			}
 
 			r.writeLock.Lock()
-			ctx, cancel := context.WithTimeout(context.Background(), ContextTimeout)
-			err = gr.Exponential(ctx, InitExponentialInterval, func(ctx context.Context) error {
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				default:
-				}
+			info, err := r.f.Stat()
+			if err != nil {
+				r.writeLock.Unlock()
+				r.l.Println("failed to stat file, cause: ", err.Error())
+				continue
+			}
 
-				err = r.rotate()
-				cancel()
-				return err
-			})
+			if float64(info.Size()) < RotateSizeThreshold*float64(r.maxSize) {
+				r.writeLock.Unlock()
+				continue
+			}
+
+			err = r.rotate()
 			r.writeLock.Unlock()
 			if err != nil {
 				r.l.Printf("asyncWork: rotate error: %v", err)
