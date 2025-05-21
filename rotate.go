@@ -80,9 +80,9 @@ func WithPeriod(period uint16) Option {
 }
 
 // WithMaxCount 设置保存的最大文件数量
-func WithMaxCount(count uint16) Option {
-	return func(r *Rotator) error {
-		r.cleanup.maxCount = count
+func WithMaxCount(_ uint16) Option {
+	return func(_ *Rotator) error {
+		// TODO 处理CleanUp初始化
 		return nil
 	}
 }
@@ -127,7 +127,7 @@ type Rotator struct {
 	// 压缩配置
 	cpr Compress
 	// 清理过期文件的配置
-	cleanup Cleanup
+	cleanup *CleanUp
 	// 关闭信号
 	sig atomic.Int32
 	// 轮转计数器
@@ -161,13 +161,9 @@ func newRotator(dir, filename string, opts ...Option) (*Rotator, error) {
 	}
 
 	rotator := &Rotator{
-		dir:      dir,
-		filename: sli[0],
-		ext:      sli[1],
-		cleanup: Cleanup{
-			period:   DefaultPeriod,
-			maxCount: DefaultMaxCount,
-		},
+		dir:       dir,
+		filename:  sli[0],
+		ext:       sli[1],
 		writeLock: sync.RWMutex{},
 		l:         log.New(os.Stdout, "", log.LstdFlags),
 		maxSize:   DefaultMaxSize,

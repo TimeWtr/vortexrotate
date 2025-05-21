@@ -33,7 +33,8 @@ func initForTest(compress bool) error {
 		r, err = newRotator("./tests",
 			fmt.Sprintf("testdata_%d.log", rand.Intn(1000)),
 			WithCompress(CompressTypeGzip, GzipBestCompression),
-			WithRotate(1024*1024*10, _Second))
+			WithRotate(1024*1024*10, _Second),
+			WithMaxCount(1024))
 	} else {
 		r, err = newRotator("./tests",
 			fmt.Sprintf("testdata_%d.log", rand.Intn(1000)),
