@@ -14,6 +14,10 @@ ut:
 lint:
 	@golangci-lint run -c ./scripts/lint/.golangci.yml ./...
 
+.PHONY: cover
+cover:
+	@go test -coverprofile=coverage.out ./...
+
 .PHONY: clean
 clean:
 	@cd tests && ls | grep -v "test.log" | grep -v "test.reset.log" | xargs rm -rf
