@@ -183,8 +183,8 @@ func newRotator(dir, filename string, opts ...Option) (*Rotator, error) {
 	rotator.f = f
 
 	for _, opt := range opts {
-		if err := opt(rotator); err != nil {
-			return nil, err
+		if err1 := opt(rotator); err1 != nil {
+			return nil, err1
 		}
 	}
 
