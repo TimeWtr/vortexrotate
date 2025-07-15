@@ -16,19 +16,29 @@ package vortexrotate
 
 import "sync"
 
-// OnceWithError once执行返回运行的错误信息
+// OnceWithError 用于确保一个初始化函数只执行一次，并保存其返回的错误信息。
+// 结构体包含一个 noCopy 字段防止拷贝，一个 sync.Once 实例保证单次执行，以及一个 error 字段保存执行结果。
 type OnceWithError struct {
 	nocopy noCopy
 	once   sync.Once
 	err    error
 }
 
+// Do 方法接收一个无参数、返回 error 的函数 f。
+// 该方法确保 f 只被执行一次，并将其返回值保存在 OnceWithError 实例的 err 字段中。
+// 参数:
+//
+//	f - 初始化函数，返回一个 error。
 func (o *OnceWithError) Do(f func() error) {
 	o.once.Do(func() {
 		o.err = f()
 	})
 }
 
+// Err 方法用于获取 OnceWithError 实例中保存的错误信息。
+// 返回值:
+//
+//	error - 初始化函数执行后保存的错误信息。
 func (o *OnceWithError) Err() error {
 	return o.err
 }
